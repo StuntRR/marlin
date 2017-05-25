@@ -550,9 +550,13 @@ static int sugov_init(struct cpufreq_policy *policy)
 	if (policy->governor_data)
 		return -EBUSY;
 
+	cpufreq_enable_fast_switch(policy);
+
 	sg_policy = sugov_policy_alloc(policy);
-	if (!sg_policy)
-		return -ENOMEM;
+	if (!sg_policy) {
+		ret = -ENOMEM;
+		goto disable_fast_switch;
+	}
 
 	mutex_lock(&global_tunables_lock);
 
@@ -593,8 +597,6 @@ static int sugov_init(struct cpufreq_policy *policy)
 
  out:
 	mutex_unlock(&global_tunables_lock);
-
-	cpufreq_enable_fast_switch(policy);
 	return 0;
 
  fail:
@@ -605,6 +607,10 @@ static int sugov_init(struct cpufreq_policy *policy)
 	mutex_unlock(&global_tunables_lock);
 
 	sugov_policy_free(sg_policy);
+
+disable_fast_switch:
+	cpufreq_disable_fast_switch(policy);
+
 	pr_err("initialization failed (error %d)\n", ret);
 	return ret;
 }
@@ -614,8 +620,6 @@ static int sugov_exit(struct cpufreq_policy *policy)
 	struct sugov_policy *sg_policy = policy->governor_data;
 	struct sugov_tunables *tunables = sg_policy->tunables;
 	unsigned int count;
-
-	cpufreq_disable_fast_switch(policy);
 
 	mutex_lock(&global_tunables_lock);
 
@@ -628,6 +632,7 @@ static int sugov_exit(struct cpufreq_policy *policy)
 
 	sugov_policy_free(sg_policy);
 
+	cpufreq_disable_fast_switch(policy);
 	return 0;
 }
 
