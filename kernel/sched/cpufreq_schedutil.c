@@ -397,8 +397,56 @@ static struct sugov_policy *sugov_policy_alloc(struct cpufreq_policy *policy)
 
 static void sugov_policy_free(struct sugov_policy *sg_policy)
 {
-	mutex_destroy(&sg_policy->work_lock);
 	kfree(sg_policy);
+}
+
+static int sugov_kthread_create(struct sugov_policy *sg_policy)
+{
+	struct task_struct *thread;
+	struct sched_param param = { .sched_priority = MAX_USER_RT_PRIO / 2 };
+	struct cpufreq_policy *policy = sg_policy->policy;
+	int ret;
+
+	/* kthread only required for slow path */
+	if (policy->fast_switch_enabled)
+		return 0;
+
+	init_kthread_work(&sg_policy->work, sugov_work);
+	init_kthread_worker(&sg_policy->worker);
+	thread = kthread_create(kthread_worker_fn, &sg_policy->worker,
+				"sugov:%d",
+				cpumask_first(policy->related_cpus));
+	if (IS_ERR(thread)) {
+		pr_err("failed to create sugov thread: %ld\n", PTR_ERR(thread));
+		return PTR_ERR(thread);
+	}
+
+	ret = sched_setscheduler_nocheck(thread, SCHED_FIFO, &param);
+	if (ret) {
+		kthread_stop(thread);
+		pr_warn("%s: failed to set SCHED_FIFO\n", __func__);
+		return ret;
+	}
+
+	sg_policy->thread = thread;
+	kthread_bind_mask(thread, policy->related_cpus);
+	init_irq_work(&sg_policy->irq_work, sugov_irq_work);
+	mutex_init(&sg_policy->work_lock);
+
+	wake_up_process(thread);
+
+	return 0;
+}
+
+static void sugov_kthread_stop(struct sugov_policy *sg_policy)
+{
+	/* kthread only required for slow path */
+	if (sg_policy->policy->fast_switch_enabled)
+		return;
+
+	flush_kthread_worker(&sg_policy->worker);
+	kthread_stop(sg_policy->thread);
+	mutex_destroy(&sg_policy->work_lock);
 }
 
 static struct sugov_tunables *sugov_tunables_alloc(struct sugov_policy *sg_policy)
@@ -557,6 +605,10 @@ static int sugov_stop(struct cpufreq_policy *policy)
 	irq_work_sync(&sg_policy->irq_work);
 	cancel_work_sync(&sg_policy->work);
 
+	if (!policy->fast_switch_enabled) {
+		irq_work_sync(&sg_policy->irq_work);
+		kthread_cancel_work_sync(&sg_policy->work);
+	}
 	return 0;
 }
 
