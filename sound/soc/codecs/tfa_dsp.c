@@ -1464,7 +1464,7 @@ const char *tfa98xx_get_i2c_status_id_string(int status)
 		break;
 	}
 
-	return p_id_str;
+	return 0;
 }
 
 enum Tfa98xx_Error tfa_dsp_msg_read(Tfa98xx_handle_t handle, int length, unsigned char *bytes)
