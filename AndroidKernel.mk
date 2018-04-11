@@ -1,3 +1,7 @@
+export KBUILD_BUILD_TIMESTAMP := $(shell $(DATE))
+export KBUILD_BUILD_USER := copperheados
+export KBUILD_BUILD_HOST := copperheados
+
 #Android makefile to build kernel as a part of Android Build
 PERL		= perl
 
@@ -52,21 +56,12 @@ current_dir := $(notdir $(patsubst %/,%,$(dir $(mkfile_path))))
 ifeq ($(TARGET_KERNEL_VERSION),)
     TARGET_KERNEL_VERSION := 3.18
 endif
-TARGET_KERNEL := msm-$(TARGET_KERNEL_VERSION)
-ifeq ($(TARGET_KERNEL),$(current_dir))
-    # New style, kernel/msm-version
-    BUILD_ROOT_LOC := ../../
-    TARGET_KERNEL_SOURCE := kernel/$(TARGET_KERNEL)
-    KERNEL_OUT := $(TARGET_OUT_INTERMEDIATES)/kernel/$(TARGET_KERNEL)
-    KERNEL_SYMLINK := $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ
-    KERNEL_USR := $(KERNEL_SYMLINK)/usr
-else
-    # Legacy style, kernel source directly under kernel
-    KERNEL_LEGACY_DIR := true
-    BUILD_ROOT_LOC := ../
-    TARGET_KERNEL_SOURCE := kernel
-    KERNEL_OUT := $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ
-endif
+TARGET_KERNEL := google/marlin
+BUILD_ROOT_LOC := ../../../
+TARGET_KERNEL_SOURCE := kernel/$(TARGET_KERNEL)
+KERNEL_OUT := $(TARGET_OUT_INTERMEDIATES)/kernel/$(TARGET_KERNEL)
+KERNEL_SYMLINK := $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ
+KERNEL_USR := $(KERNEL_SYMLINK)/usr
 
 KERNEL_CONFIG := $(KERNEL_OUT)/.config
 
@@ -79,7 +74,7 @@ $(info Using uncompressed kernel)
 TARGET_PREBUILT_INT_KERNEL := $(KERNEL_OUT)/arch/$(KERNEL_ARCH)/boot/Image
 else
 ifeq ($(KERNEL_ARCH),arm64)
-TARGET_PREBUILT_INT_KERNEL := $(KERNEL_OUT)/arch/$(KERNEL_ARCH)/boot/Image.gz
+TARGET_PREBUILT_INT_KERNEL := $(KERNEL_OUT)/arch/$(KERNEL_ARCH)/boot/Image.lz4
 else
 TARGET_PREBUILT_INT_KERNEL := $(KERNEL_OUT)/arch/$(KERNEL_ARCH)/boot/zImage
 endif
@@ -91,26 +86,8 @@ TARGET_PREBUILT_INT_KERNEL := $(TARGET_PREBUILT_INT_KERNEL)-dtb
 endif
 
 KERNEL_HEADERS_INSTALL := $(KERNEL_OUT)/usr
-KERNEL_MODULES_INSTALL := system
-KERNEL_MODULES_OUT := $(TARGET_OUT)/lib/modules
 
 TARGET_PREBUILT_KERNEL := $(TARGET_PREBUILT_INT_KERNEL)
-
-define mv-modules
-mdpath=`find $(KERNEL_MODULES_OUT) -type f -name modules.dep`;\
-if [ "$$mdpath" != "" ];then\
-mpath=`dirname $$mdpath`;\
-ko=`find $$mpath/kernel -type f -name *.ko`;\
-for i in $$ko; do mv $$i $(KERNEL_MODULES_OUT)/; done;\
-fi
-endef
-
-define clean-module-folder
-mdpath=`find $(KERNEL_MODULES_OUT) -type f -name modules.dep`;\
-if [ "$$mdpath" != "" ];then\
-mpath=`dirname $$mdpath`; rm -rf $$mpath;\
-fi
-endef
 
 ifneq ($(KERNEL_LEGACY_DIR),true)
 $(KERNEL_USR): $(KERNEL_HEADERS_INSTALL)
@@ -134,10 +111,6 @@ $(TARGET_PREBUILT_INT_KERNEL): $(KERNEL_OUT) $(KERNEL_HEADERS_INSTALL)
 	$(hide) echo "Building kernel..."
 	$(hide) rm -rf $(KERNEL_OUT)/arch/$(KERNEL_ARCH)/boot/dts
 	$(MAKE) -C $(TARGET_KERNEL_SOURCE) O=$(BUILD_ROOT_LOC)$(KERNEL_OUT) ARCH=$(KERNEL_ARCH) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) $(KERNEL_CFLAGS)
-	$(MAKE) -C $(TARGET_KERNEL_SOURCE) O=$(BUILD_ROOT_LOC)$(KERNEL_OUT) ARCH=$(KERNEL_ARCH) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) $(KERNEL_CFLAGS) modules
-	$(MAKE) -C $(TARGET_KERNEL_SOURCE) O=$(BUILD_ROOT_LOC)$(KERNEL_OUT) INSTALL_MOD_PATH=$(BUILD_ROOT_LOC)../$(KERNEL_MODULES_INSTALL) INSTALL_MOD_STRIP=1 ARCH=$(KERNEL_ARCH) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) modules_install
-	$(mv-modules)
-	$(clean-module-folder)
 
 $(KERNEL_HEADERS_INSTALL): $(KERNEL_OUT)
 	$(hide) if [ ! -z "$(KERNEL_HEADER_DEFCONFIG)" ]; then \
