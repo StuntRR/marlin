@@ -40,8 +40,6 @@
 #include <asm/vdso.h>
 #include <asm/vdso_datapage.h>
 
-extern char vdso_start[], vdso_end[];
-static unsigned long vdso_pages __ro_after_init;
 #ifdef USE_SYSCALL
 #if defined(__LP64__)
 static int enable_64 = 1;
