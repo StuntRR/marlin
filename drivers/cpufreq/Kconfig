@@ -127,13 +127,6 @@ config CPU_FREQ_DEFAULT_GOV_SCHED
 	  cpu frequency using CPU utilization estimates from the
 	  scheduler.
 
-config CPU_FREQ_DEFAULT_GOV_WHEATLEY
-	bool "wheatley"
-	select CPU_FREQ_GOV_WHEATLEY
-	select CPU_FREQ_GOV_PERFORMANCE
-	---help---
-	  Use the CPUFreq governor 'wheatley' as default.
-
 config CPU_FREQ_DEFAULT_GOV_SCHEDUTIL
 	bool "schedutil"
 	depends on SMP
