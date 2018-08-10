@@ -162,7 +162,6 @@ typedef struct sg_fd {		/* holds the state of a file descriptor */
 	struct list_head rq_list; /* head of request list */
 	struct fasync_struct *async_qp;	/* used by asynchronous notification */
 	Sg_request req_arr[SG_MAX_QUEUE];	/* used as singly-linked list */
-	char low_dma;           /* as in parent but possibly overridden to 1 */
 	char force_packid;	/* 1 -> pack_id input to read(), 0 -> ignored */
 	char cmd_q;		/* 1 -> allow command queuing, 0 -> don't */
 	unsigned char next_cmd_len; /* 0: automatic, >0: use on next write() */
@@ -991,24 +990,6 @@ sg_ioctl(struct file *filp, unsigned int cmd_in, unsigned long arg)
 				/* strange ..., for backward compatibility */
 		return sfp->timeout_user;
 	case SG_SET_FORCE_LOW_DMA:
-
-		result = get_user(val, ip);
-		if (result)
-			return result;
-		if (val) {
-			sfp->low_dma = 1;
-			if ((0 == sfp->low_dma) && !sfp->res_in_use) {
-				val = (int) sfp->reserve.bufflen;
-				mutex_lock(&sfp->parentdp->open_rel_lock);
-				sg_remove_scat(sfp, &sfp->reserve);
-				sg_build_reserve(sfp, val);
-				mutex_unlock(&sfp->parentdp->open_rel_lock);
-			}
-		} else {
-			if (atomic_read(&sdp->detaching))
-				return -ENODEV;
-			sfp->low_dma = sdp->device->host->unchecked_isa_dma;
-		}
 		/*
 		 * N.B. This ioctl never worked properly, but failed to
 		 * return an error value. So returning '0' to keep compability
@@ -2261,6 +2242,7 @@ sg_add_sfp(Sg_device * sdp)
 	write_lock_irqsave(&sdp->sfd_lock, iflags);
 	if (atomic_read(&sdp->detaching)) {
 		write_unlock_irqrestore(&sdp->sfd_lock, iflags);
+		kfree(sfp);
 		return ERR_PTR(-ENODEV);
 	}
 	list_add_tail(&sfp->sfd_siblings, &sdp->sfds);
